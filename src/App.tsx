@@ -64,11 +64,24 @@ export default function App() {
     s.running = false
   }, [])
 
+  const pendingModeRef = useRef<'flick' | 'tracking' | 'reaction' | null>(null)
+
   const startGame = useCallback((m: 'flick' | 'tracking' | 'reaction') => {
     setResult(null)
+    pendingModeRef.current = m
     setMode(m)
-    const canvas = canvasRef.current!
-    const ctx = canvas.getContext('2d')!
+  }, [])
+
+  // Initialize canvas after mode changes to game mode
+  useEffect(() => {
+    const m = pendingModeRef.current
+    if (!m || (mode !== 'flick' && mode !== 'tracking' && mode !== 'reaction')) return
+    pendingModeRef.current = null
+
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
     canvas.width = window.innerWidth
     canvas.height = window.innerHeight
 
@@ -276,7 +289,7 @@ export default function App() {
       rafRef.current = requestAnimationFrame(draw)
     }
     rafRef.current = requestAnimationFrame(draw)
-  }, [targetSize, stopGame])
+  }, [mode, targetSize, stopGame])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
