@@ -33,7 +33,7 @@ export const gridshot: GameModeHandler = {
 
 function spawnGridshotTarget(w: number, h: number, s: GameState) {
   const [x, y] = randomPos(w, h, 3)
-  s.targets.push(createTarget(x, y, 1.5, '#00aaff'))
+  s.targets.push(createTarget(x, y, 1.5, '#00ccaa'))
 }
 
 // ─── Multiclick ───
@@ -59,7 +59,7 @@ export const multiclick: GameModeHandler = {
 
 function spawnMulticlickTarget(w: number, h: number, s: GameState) {
   const [x, y] = randomPos(w, h, 4)
-  const t = createTarget(x, y, 2.8, '#00aaff')
+  const t = createTarget(x, y, 2.8, '#00ccaa')
   t.clicksLeft = 3
   s.targets.push(t)
 }
@@ -85,7 +85,7 @@ export const sixshot: GameModeHandler = {
 function spawnSixshotGroup(w: number, h: number, s: GameState) {
   for (let i = 0; i < 6; i++) {
     const [x, y] = randomPos(w, h, 2)
-    s.targets.push(createTarget(x, y, 0.8, '#00aaff'))
+    s.targets.push(createTarget(x, y, 0.8, '#00ccaa'))
   }
 }
 
@@ -114,7 +114,7 @@ function spawnSpiderTargets(s: GameState) {
     const radius = 4 + ring * 7
     for (let i = 0; i < perRing; i++) {
       const angle = (Math.PI * 2 / perRing) * i + ring * 0.5
-      s.targets.push(createTarget(Math.cos(angle) * radius, Math.sin(angle) * radius, 1.2, '#00aaff'))
+      s.targets.push(createTarget(Math.cos(angle) * radius, Math.sin(angle) * radius, 1.2, '#00ccaa'))
     }
   }
 }
@@ -149,7 +149,7 @@ export const motionshot: GameModeHandler = {
 
 function spawnMotionTarget(w: number, h: number, s: GameState) {
   const [x, y] = randomPos(w, h, 3)
-  const t = createTarget(x, y, 1.4, '#00aaff')
+  const t = createTarget(x, y, 1.4, '#00ccaa')
   const speed = 0.15 + Math.random() * 0.2
   const angle = Math.random() * Math.PI * 2
   t.vx = Math.cos(angle) * speed
@@ -387,7 +387,7 @@ function spawnDetectionGroup(w: number, h: number, s: GameState) {
   const correctIdx = Math.floor(Math.random() * count)
   for (let i = 0; i < count; i++) {
     const [x, y] = randomPos(w, h, 3)
-    s.targets.push(createTarget(x, y, 1.3, i === correctIdx ? '#ff3366' : '#00aaff'))
+    s.targets.push(createTarget(x, y, 1.3, i === correctIdx ? '#ff3366' : '#00ccaa'))
   }
 }
 

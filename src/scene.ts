@@ -8,8 +8,9 @@ const zPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0)
 
 export function initScene(container: HTMLElement) {
   scene = new THREE.Scene()
-  scene.background = new THREE.Color(0x050508)
-  scene.fog = new THREE.FogExp2(0x050508, 0.005)
+  // Aim Lab default: dark gray background, NOT black
+  scene.background = new THREE.Color(0x1a1a1a)
+  scene.fog = new THREE.Fog(0x1a1a1a, 60, 140)
 
   camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200)
   camera.position.set(0, 0, 50)
@@ -18,109 +19,86 @@ export function initScene(container: HTMLElement) {
   renderer = new THREE.WebGLRenderer({ antialias: true })
   renderer.setSize(window.innerWidth, window.innerHeight)
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-  renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = THREE.PCFShadowMap
   renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 0.9
+  renderer.toneMappingExposure = 1.0
   container.appendChild(renderer.domElement)
 
-  // ── Lighting ──
-  scene.add(new THREE.AmbientLight(0x404060, 0.8))
+  // ── Aim Lab lighting: neutral, even, not colored ──
+  // Soft ambient fill
+  scene.add(new THREE.AmbientLight(0x888888, 0.6))
 
-  const spot = new THREE.SpotLight(0xffffff, 10, 150, Math.PI / 2.5, 0.7, 1)
-  spot.position.set(0, 35, 30)
-  spot.target.position.set(0, 0, 0)
-  spot.castShadow = true
-  scene.add(spot)
-  scene.add(spot.target)
+  // Main directional light (overhead, like Aim Lab's sun)
+  const sun = new THREE.DirectionalLight(0xffffff, 1.2)
+  sun.position.set(5, 30, 20)
+  scene.add(sun)
 
-  const cyan = new THREE.PointLight(0x00ccff, 4, 100)
-  cyan.position.set(-40, -10, 30)
-  scene.add(cyan)
-  const green = new THREE.PointLight(0x00ff88, 4, 100)
-  green.position.set(40, 10, 30)
-  scene.add(green)
+  // Fill light from below-front
+  const fill = new THREE.DirectionalLight(0xcccccc, 0.4)
+  fill.position.set(-10, -5, 15)
+  scene.add(fill)
 
-  // ── Room — sized to fill camera view ──
+  // ── Room (Graybox style — visible gray walls/floor) ──
   const bounds = getVisibleBounds()
-  const hw = bounds.halfW * 1.15
-  const hh = bounds.halfH * 1.15
+  const hw = bounds.halfW * 1.2
+  const hh = bounds.halfH * 1.2
 
-  // Floor — noticeably visible
-  const floorMat = new THREE.MeshStandardMaterial({ color: 0x141425, roughness: 0.8, metalness: 0.2 })
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(hw * 3, 80), floorMat)
+  const wallColor = 0x2a2a2a  // medium gray walls — clearly visible
+  const gridColor1 = 0x444444  // grid lines — visible against gray walls
+  const gridColor2 = 0x363636
+
+  // Floor
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.95, metalness: 0.0 })
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(hw * 3, 100), floorMat)
   floor.rotation.x = -Math.PI / 2
   floor.position.set(0, -hh, 0)
-  floor.receiveShadow = true
   scene.add(floor)
 
-  // Floor grid — bright enough to see clearly
-  const fGrid = new THREE.GridHelper(hw * 3, Math.round(hw * 3 / 3), 0x2a2a55, 0x1e1e44)
-  fGrid.position.set(0, -hh + 0.05, 0)
+  // Floor grid
+  const fGrid = new THREE.GridHelper(hw * 3, Math.round(hw * 3 / 3), gridColor1, gridColor2)
+  fGrid.position.set(0, -hh + 0.02, 0)
   scene.add(fGrid)
 
-  // Back wall — lighter so it's visible
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0x101020, roughness: 0.85, metalness: 0.1 })
+  // Back wall
+  const wallMat = new THREE.MeshStandardMaterial({ color: wallColor, roughness: 0.95, metalness: 0.0 })
   const bWall = new THREE.Mesh(new THREE.PlaneGeometry(hw * 3, hh * 3), wallMat)
-  bWall.position.set(0, 0, -15)
-  bWall.receiveShadow = true
+  bWall.position.set(0, 0, -18)
   scene.add(bWall)
 
-  const bGrid = new THREE.GridHelper(hw * 3, Math.round(hw * 3 / 4), 0x2a2a55, 0x1e1e44)
+  // Back wall grid (subtle)
+  const bGrid = new THREE.GridHelper(hw * 3, Math.round(hw * 3 / 4), 0x333333, 0x2d2d2d)
   bGrid.rotation.x = Math.PI / 2
-  bGrid.position.set(0, 0, -14.8)
+  bGrid.position.set(0, 0, -17.9)
   scene.add(bGrid)
 
   // Left wall
-  const lWall = new THREE.Mesh(new THREE.PlaneGeometry(80, hh * 3), wallMat)
+  const lWall = new THREE.Mesh(new THREE.PlaneGeometry(100, hh * 3), wallMat)
   lWall.rotation.y = Math.PI / 2
   lWall.position.set(-hw, 0, 0)
   scene.add(lWall)
-  const lGrid = new THREE.GridHelper(80, 15, 0x2a2a55, 0x1e1e44)
+
+  const lGrid = new THREE.GridHelper(100, 20, 0x333333, 0x2d2d2d)
   lGrid.rotation.z = Math.PI / 2
-  lGrid.position.set(-hw + 0.05, 0, 0)
+  lGrid.position.set(-hw + 0.02, 0, 0)
   scene.add(lGrid)
 
   // Right wall
-  const rWall = new THREE.Mesh(new THREE.PlaneGeometry(80, hh * 3), wallMat)
+  const rWall = new THREE.Mesh(new THREE.PlaneGeometry(100, hh * 3), wallMat)
   rWall.rotation.y = -Math.PI / 2
   rWall.position.set(hw, 0, 0)
   scene.add(rWall)
-  const rGrid = new THREE.GridHelper(80, 15, 0x2a2a55, 0x1e1e44)
+
+  const rGrid = new THREE.GridHelper(100, 20, 0x333333, 0x2d2d2d)
   rGrid.rotation.z = Math.PI / 2
-  rGrid.position.set(hw - 0.05, 0, 0)
+  rGrid.position.set(hw - 0.02, 0, 0)
   scene.add(rGrid)
 
   // Ceiling
-  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(hw * 3, 80), new THREE.MeshStandardMaterial({ color: 0x0c0c18, roughness: 0.9 }))
+  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(hw * 3, 100), new THREE.MeshStandardMaterial({ color: 0x1e1e1e, roughness: 0.95 }))
   ceil.rotation.x = Math.PI / 2
   ceil.position.set(0, hh, 0)
   scene.add(ceil)
 
-  // ── Bright edge trim lines ──
-  // Floor edges
-  const greenMat = new THREE.LineBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.5 })
-  addLine(greenMat, [[-hw, -hh + 0.1, -15], [hw, -hh + 0.1, -15], [hw, -hh + 0.1, 30], [-hw, -hh + 0.1, 30], [-hw, -hh + 0.1, -15]])
-
-  // Wall bottom edges
-  addLine(greenMat, [[-hw, -hh, -14.9], [hw, -hh, -14.9]])
-  // Wall top edges
-  addLine(greenMat, [[-hw, hh, -14.9], [hw, hh, -14.9]])
-  // Wall left edge
-  const cyanMat = new THREE.LineBasicMaterial({ color: 0x00ccff, transparent: true, opacity: 0.4 })
-  addLine(cyanMat, [[-hw, -hh, -14.9], [-hw, hh, -14.9]])
-  // Wall right edge
-  addLine(cyanMat, [[hw, -hh, -14.9], [hw, hh, -14.9]])
-
-  // Floor/wall intersection highlight
-  addLine(new THREE.LineBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.3 }), [[-hw, -hh, 0], [hw, -hh, 0]])
-
   window.addEventListener('resize', onResize)
-}
-
-function addLine(mat: THREE.LineBasicMaterial, pts: [number, number, number][]) {
-  const geo = new THREE.BufferGeometry().setFromPoints(pts.map(p => new THREE.Vector3(p[0], p[1], p[2])))
-  scene.add(new THREE.Line(geo, mat))
 }
 
 function onResize() {
