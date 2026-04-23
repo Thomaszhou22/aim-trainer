@@ -8,6 +8,57 @@ import type { Target } from './engine'
 
 type Screen = 'menu' | 'game' | 'result'
 
+function Crosshair() {
+  const [pos, setPos] = useState({ x: -100, y: -100 })
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => setPos({ x: e.clientX, y: e.clientY })
+    window.addEventListener('mousemove', onMove)
+    return () => window.removeEventListener('mousemove', onMove)
+  }, [])
+  return (
+    <div style={{ position: 'fixed', left: pos.x - 16, top: pos.y - 16, pointerEvents: 'none', zIndex: 100 }}>
+      <svg width="32" height="32" viewBox="0 0 32 32">
+        <line x1="16" y1="2" x2="16" y2="12" stroke="#00ff88" strokeWidth="2" />
+        <line x1="16" y1="20" x2="16" y2="30" stroke="#00ff88" strokeWidth="2" />
+        <line x1="2" y1="16" x2="12" y2="16" stroke="#00ff88" strokeWidth="2" />
+        <line x1="20" y1="16" x2="30" y2="16" stroke="#00ff88" strokeWidth="2" />
+        <circle cx="16" cy="16" r="2" fill="none" stroke="#00ff88" strokeWidth="1.5" opacity="0.6" />
+      </svg>
+    </div>
+  )
+}
+
+function HUDOverlay({ stateRef }: { stateRef: React.RefObject<GameState> }) {
+  const [hud, setHud] = useState({ score: 0, time: 0, clicks: 0, hits: 0 })
+  useEffect(() => {
+    const iv = setInterval(() => {
+      const s = stateRef.current
+      if (!s.running) return
+      const elapsed = Math.max(0, (s.duration - (Date.now() - s.startTime) / 1000))
+      setHud({ score: s.score, time: Math.ceil(elapsed), clicks: s.clicks, hits: s.hits })
+    }, 100)
+    return () => clearInterval(iv)
+  }, [stateRef])
+  const acc = hud.clicks > 0 ? Math.round(hud.hits / hud.clicks * 100) : 0
+  return (
+    <div className="fixed top-0 left-0 right-0 pointer-events-none z-50" style={{ fontFamily: 'monospace' }}>
+      <div className="flex justify-between items-start p-4">
+        <div className="text-left">
+          <div className="text-3xl font-bold" style={{ color: '#00ff88', textShadow: '0 0 10px #00ff8866' }}>{hud.score}</div>
+          <div className="text-xs" style={{ color: '#666' }}>SCORE</div>
+        </div>
+        <div className="text-center">
+          <div className="text-2xl font-bold" style={{ color: hud.time <= 5 ? '#ff3366' : '#ffffff' }}>{hud.time}s</div>
+        </div>
+        <div className="text-right">
+          <div className="text-lg" style={{ color: '#00ccff' }}>{acc}%</div>
+          <div className="text-xs" style={{ color: '#666' }}>ACC</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>('menu')
   const [, setActiveMode] = useState<string | null>(null)
@@ -84,9 +135,7 @@ export default function App() {
     }
     const onClick = (e: MouseEvent) => {
       if (!s.running) return
-      const wp = screenToWorld(e.clientX, e.clientY)
-      if (!wp) return
-      handler.onClick(wp.x, wp.y, s)
+      handler.onClick(e.clientX, e.clientY, s)
     }
 
     window.addEventListener('mousemove', onMouse)
@@ -244,9 +293,13 @@ export default function App() {
 
   // ─── Game ───
   if (screen === 'game') {
-    return <div ref={gameRef} className="fixed inset-0 w-full h-full" style={{ cursor: 'none' }} />
+    return (
+      <div ref={gameRef} className="fixed inset-0 w-full h-full" style={{ cursor: 'none' }}>
+        <Crosshair />
+        <HUDOverlay stateRef={stateRef} />
+      </div>
+    )
   }
-
   // ─── Result ───
   if (screen === 'result' && result) {
     const best = getBest(result.mode)
