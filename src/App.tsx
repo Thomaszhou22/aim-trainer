@@ -11,9 +11,12 @@ interface GameResult {
   date: string
 }
 
+let _audioCtx: AudioContext | null = null
 function playBeep(freq = 800, dur = 50) {
   try {
-    const ctx = new AudioContext()
+    if (!_audioCtx) _audioCtx = new AudioContext()
+    const ctx = _audioCtx
+    if (ctx.state === 'suspended') ctx.resume()
     const osc = ctx.createOscillator()
     const gain = ctx.createGain()
     osc.connect(gain).connect(ctx.destination)
