@@ -9,10 +9,10 @@ const zPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0)
 export function initScene(container: HTMLElement) {
   scene = new THREE.Scene()
   scene.background = new THREE.Color(0x080810)
-  scene.fog = new THREE.FogExp2(0x080810, 0.008)
+  scene.fog = new THREE.FogExp2(0x080810, 0.006)
 
-  camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 200)
-  camera.position.set(0, 0, 45)
+  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200)
+  camera.position.set(0, 0, 50)
   camera.lookAt(0, 0, 0)
 
   renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -21,127 +21,107 @@ export function initScene(container: HTMLElement) {
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFSoftShadowMap
   renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 1.2
+  renderer.toneMappingExposure = 1.0
   container.appendChild(renderer.domElement)
 
   // ── Lighting ──
-  // Dim ambient so targets glow
-  scene.add(new THREE.AmbientLight(0x303050, 0.6))
+  scene.add(new THREE.AmbientLight(0x303050, 0.4))
 
-  // Key light from above-front (mimics Aim Lab overhead lighting)
-  const keyLight = new THREE.SpotLight(0xffffff, 15, 120, Math.PI / 3, 0.5, 1)
-  keyLight.position.set(0, 30, 30)
-  keyLight.castShadow = true
-  keyLight.shadow.mapSize.set(1024, 1024)
-  scene.add(keyLight)
-  scene.add(keyLight.target)
+  // Overhead spot — the main "room light"
+  const spot = new THREE.SpotLight(0xeeeeff, 12, 120, Math.PI / 2.5, 0.6, 1)
+  spot.position.set(0, 40, 25)
+  spot.target.position.set(0, 0, 0)
+  spot.castShadow = true
+  spot.shadow.mapSize.set(512, 512)
+  scene.add(spot)
+  scene.add(spot.target)
 
-  // Fill lights — cyan & green accent (subtle)
-  const fill1 = new THREE.PointLight(0x00ff88, 2, 80)
-  fill1.position.set(-30, -5, 20)
-  scene.add(fill1)
+  // Accent lights
+  const cyan = new THREE.PointLight(0x00ccff, 3, 100)
+  cyan.position.set(-40, -10, 30)
+  scene.add(cyan)
+  const green = new THREE.PointLight(0x00ff88, 3, 100)
+  green.position.set(40, 10, 30)
+  scene.add(green)
 
-  const fill2 = new THREE.PointLight(0x0088ff, 2, 80)
-  fill2.position.set(30, 5, 20)
-  scene.add(fill2)
+  // ── Room geometry (fills the camera view) ──
+  const bounds = getVisibleBounds()
+  const w = bounds.halfW * 2.2
+  const h = bounds.halfH * 2.2
 
-  // ── Floor ──
-  const floorGeo = new THREE.PlaneGeometry(200, 120)
-  const floorMat = new THREE.MeshStandardMaterial({
-    color: 0x0c0c18,
-    roughness: 0.9,
-    metalness: 0.1,
-  })
-  const floor = new THREE.Mesh(floorGeo, floorMat)
+  // Floor
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0x0e0e1a, roughness: 0.85, metalness: 0.1 })
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(w * 1.5, 80), floorMat)
   floor.rotation.x = -Math.PI / 2
-  floor.position.y = -30
+  floor.position.set(0, -h / 2, 0)
   floor.receiveShadow = true
   scene.add(floor)
 
-  // Floor grid lines (custom — brighter than Aim Lab but subtle)
-  const floorGrid = new THREE.GridHelper(200, 40, 0x1a1a30, 0x12122a)
-  floorGrid.position.y = -29.9
-  scene.add(floorGrid)
+  // Floor grid (bright enough to see)
+  const fGrid = new THREE.GridHelper(w * 1.5, Math.round(w / 3), 0x222244, 0x181838)
+  fGrid.position.set(0, -h / 2 + 0.05, 0)
+  scene.add(fGrid)
 
-  // ── Back wall ──
-  const wallGeo = new THREE.PlaneGeometry(200, 100)
-  const wallMat = new THREE.MeshStandardMaterial({
-    color: 0x0a0a16,
-    roughness: 0.95,
-    metalness: 0.05,
-  })
-  const backWall = new THREE.Mesh(wallGeo, wallMat)
-  backWall.position.z = -20
-  backWall.receiveShadow = true
-  scene.add(backWall)
+  // Back wall
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0x0b0b16, roughness: 0.9, metalness: 0.05 })
+  const bWall = new THREE.Mesh(new THREE.PlaneGeometry(w * 1.5, h * 2.5), wallMat)
+  bWall.position.set(0, 0, -15)
+  bWall.receiveShadow = true
+  scene.add(bWall)
 
-  // Back wall grid
-  const wallGrid = new THREE.GridHelper(200, 30, 0x181830, 0x101028)
-  wallGrid.rotation.x = Math.PI / 2
-  wallGrid.position.z = -19.8
-  scene.add(wallGrid)
+  const bGrid = new THREE.GridHelper(w * 1.5, Math.round(w / 4), 0x1e1e3a, 0x141430)
+  bGrid.rotation.x = Math.PI / 2
+  bGrid.position.set(0, 0, -14.8)
+  scene.add(bGrid)
 
-  // ── Left wall ──
-  const leftWall = new THREE.Mesh(
-    new THREE.PlaneGeometry(120, 100),
-    new THREE.MeshStandardMaterial({ color: 0x090914, roughness: 0.95 })
-  )
-  leftWall.rotation.y = Math.PI / 2
-  leftWall.position.x = -60
-  scene.add(leftWall)
+  // Left wall
+  const lWall = new THREE.Mesh(new THREE.PlaneGeometry(80, h * 2.5), wallMat)
+  lWall.rotation.y = Math.PI / 2
+  lWall.position.set(-w / 2, 0, 0)
+  scene.add(lWall)
 
-  // Left wall grid
-  const leftGrid = new THREE.GridHelper(120, 20, 0x181830, 0x101028)
-  leftGrid.rotation.z = Math.PI / 2
-  leftGrid.position.x = -59.8
-  scene.add(leftGrid)
+  const lGrid = new THREE.GridHelper(80, 15, 0x1e1e3a, 0x141430)
+  lGrid.rotation.z = Math.PI / 2
+  lGrid.position.set(-w / 2 + 0.05, 0, 0)
+  scene.add(lGrid)
 
-  // ── Right wall ──
-  const rightWall = new THREE.Mesh(
-    new THREE.PlaneGeometry(120, 100),
-    new THREE.MeshStandardMaterial({ color: 0x090914, roughness: 0.95 })
-  )
-  rightWall.rotation.y = -Math.PI / 2
-  rightWall.position.x = 60
-  scene.add(rightWall)
+  // Right wall
+  const rWall = new THREE.Mesh(new THREE.PlaneGeometry(80, h * 2.5), wallMat)
+  rWall.rotation.y = -Math.PI / 2
+  rWall.position.set(w / 2, 0, 0)
+  scene.add(rWall)
 
-  const rightGrid = new THREE.GridHelper(120, 20, 0x181830, 0x101028)
-  rightGrid.rotation.z = Math.PI / 2
-  rightGrid.position.x = 59.8
-  scene.add(rightGrid)
+  const rGrid = new THREE.GridHelper(80, 15, 0x1e1e3a, 0x141430)
+  rGrid.rotation.z = Math.PI / 2
+  rGrid.position.set(w / 2 - 0.05, 0, 0)
+  scene.add(rGrid)
 
-  // ── Ceiling ──
-  const ceiling = new THREE.Mesh(
-    new THREE.PlaneGeometry(200, 120),
-    new THREE.MeshStandardMaterial({ color: 0x080812, roughness: 0.95 })
-  )
-  ceiling.rotation.x = Math.PI / 2
-  ceiling.position.y = 30
-  scene.add(ceiling)
+  // Ceiling
+  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(w * 1.5, 80), new THREE.MeshStandardMaterial({ color: 0x090912, roughness: 0.9 }))
+  ceil.rotation.x = Math.PI / 2
+  ceil.position.set(0, h / 2, 0)
+  scene.add(ceil)
 
-  // ── Edge glow lines (sci-fi trim) ──
-  const edgeMat = new THREE.LineBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.15 })
+  // ── Edge glow trim ──
+  const edgeMat = new THREE.LineBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.25 })
+  const hw = w / 2, hh = h / 2
+
   // Floor edges
-  const floorEdgeGeo = new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(-60, -29.8, -20),
-    new THREE.Vector3(60, -29.8, -20),
-    new THREE.Vector3(60, -29.8, 20),
-    new THREE.Vector3(-60, -29.8, 20),
-    new THREE.Vector3(-60, -29.8, -20),
-  ])
-  scene.add(new THREE.Line(floorEdgeGeo, edgeMat))
-
-  // Back wall edges
-  const wallEdgeGeo = new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(-60, -30, -19.8),
-    new THREE.Vector3(60, -30, -19.8),
-    new THREE.Vector3(60, 30, -19.8),
-    new THREE.Vector3(-60, 30, -19.8),
-    new THREE.Vector3(-60, -30, -19.8),
-  ])
-  scene.add(new THREE.Line(wallEdgeGeo, edgeMat))
+  addEdge(edgeMat, [[-hw, -hh + 0.1, -15], [hw, -hh + 0.1, -15], [hw, -hh + 0.1, 30], [-hw, -hh + 0.1, 30], [-hw, -hh + 0.1, -15]])
+  // Back wall bottom
+  addEdge(edgeMat, [[-hw, -hh, -14.9], [hw, -hh, -14.9], [hw, hh, -14.9], [-hw, hh, -14.9], [-hw, -hh, -14.9]])
+  // Side wall edges
+  addEdge(new THREE.LineBasicMaterial({ color: 0x00ccff, transparent: true, opacity: 0.15 }),
+    [[-hw + 0.1, -hh, -15], [-hw + 0.1, hh, -15]])
+  addEdge(new THREE.LineBasicMaterial({ color: 0x00ccff, transparent: true, opacity: 0.15 }),
+    [[hw - 0.1, -hh, -15], [hw - 0.1, hh, -15]])
 
   window.addEventListener('resize', onResize)
+}
+
+function addEdge(mat: THREE.LineBasicMaterial, pts: [number, number, number][]) {
+  const geo = new THREE.BufferGeometry().setFromPoints(pts.map(p => new THREE.Vector3(p[0], p[1], p[2])))
+  scene.add(new THREE.Line(geo, mat))
 }
 
 function onResize() {
@@ -153,10 +133,6 @@ function onResize() {
 export function getScene() { return scene }
 export function getCamera() { return camera }
 export function renderScene() { renderer.render(scene, camera) }
-
-export function setBackground(color: number) {
-  scene.background = new THREE.Color(color)
-}
 
 export function screenToWorld(sx: number, sy: number): THREE.Vector3 | null {
   const ndc = new THREE.Vector2(
