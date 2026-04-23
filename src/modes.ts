@@ -1,9 +1,14 @@
 import type { GameState } from './engine'
-import { createTarget, randomPos, hitTest, onHit, onMiss, drawTarget, drawCrosshair, drawHUD } from './engine'
+import { createTarget, randomPos, hitTest, onHit, onMiss } from './engine'
 import { playHit } from './audio'
 import type { GameResult } from './types'
-import { MODES } from './types'
-import type { GameModeHandler } from './App'
+
+export interface GameModeHandler {
+  init(w: number, h: number, s: GameState): void
+  update(w: number, h: number, s: GameState): void
+  onClick(screenX: number, screenY: number, s: GameState): void
+  checkEnd?(s: GameState): GameResult | null
+}
 
 // ─── Gridshot ───
 export const gridshot: GameModeHandler = {
@@ -11,207 +16,141 @@ export const gridshot: GameModeHandler = {
     s.targets = []
     for (let i = 0; i < 3; i++) spawnGridshotTarget(w, h, s)
   },
-  update(_w, _h, _s) {},
-  onClick(w, h, s, x, y) {
+  update() {},
+  onClick(sx, sy, s) {
     s.clicks++
     for (let i = s.targets.length - 1; i >= 0; i--) {
-      if (hitTest(x, y, s.targets[i])) {
+      if (hitTest(sx, sy, s.targets[i])) {
         onHit(s, s.targets[i])
         s.targets.splice(i, 1)
-        spawnGridshotTarget(w, h, s)
+        spawnGridshotTarget(s._worldW || 100, s._worldH || 60, s)
         return
       }
     }
     onMiss()
   },
-  draw(ctx, w, h, s) {
-    s.targets.forEach(t => drawTarget(ctx, t))
-    drawCrosshair(ctx, s.mouseX, s.mouseY)
-    const def = MODES.find(m => m.id === 'gridshot')!
-    drawHUD(ctx, w, h, s, def.name)
-  },
 }
 
 function spawnGridshotTarget(w: number, h: number, s: GameState) {
-  const [x, y] = randomPos(w, h, 60)
-  s.targets.push(createTarget(x, y, 28, '#00aaff'))
+  const [x, y] = randomPos(w, h, 3)
+  s.targets.push(createTarget(x, y, 1.5, '#00aaff'))
 }
 
 // ─── Multiclick ───
 export const multiclick: GameModeHandler = {
-  init(w, h, s) {
-    s.targets = []
-    spawnMulticlickTarget(w, h, s)
-  },
+  init(w, h, s) { s.targets = []; spawnMulticlickTarget(w, h, s) },
   update() {},
-  onClick(w, h, s, x, y) {
+  onClick(sx, sy, s) {
     const t = s.targets[0]
     if (!t) return
     s.clicks++
-    if (hitTest(x, y, t)) {
+    if (hitTest(sx, sy, t)) {
       playHit()
       t.clicksLeft!--
-      t.r = Math.max(10, t.r - 15)
+      t.r = Math.max(0.8, t.r - 0.8)
       if (t.clicksLeft! <= 0) {
         onHit(s, t)
         s.targets.splice(0, 1)
-        spawnMulticlickTarget(w, h, s)
+        spawnMulticlickTarget(s._worldW || 100, s._worldH || 60, s)
       }
-    } else {
-      onMiss()
-    }
-  },
-  draw(ctx, w, h, s) {
-    s.targets.forEach(t => {
-      drawTarget(ctx, t)
-      if (t.clicksLeft && t.clicksLeft > 1) {
-        ctx.fillStyle = '#fff'
-        ctx.font = 'bold 16px monospace'
-        ctx.textAlign = 'center'
-        ctx.fillText(String(t.clicksLeft), t.x, t.y + 5)
-      }
-    })
-    drawCrosshair(ctx, s.mouseX, s.mouseY)
-    const def = MODES.find(m => m.id === 'multiclick')!
-    drawHUD(ctx, w, h, s, def.name)
+    } else { onMiss() }
   },
 }
 
 function spawnMulticlickTarget(w: number, h: number, s: GameState) {
-  const [x, y] = randomPos(w, h, 80)
-  const t = createTarget(x, y, 55, '#00aaff')
+  const [x, y] = randomPos(w, h, 4)
+  const t = createTarget(x, y, 2.8, '#00aaff')
   t.clicksLeft = 3
   s.targets.push(t)
 }
 
 // ─── Sixshot ───
 export const sixshot: GameModeHandler = {
-  init(w, h, s) {
-    s.targets = []
-    spawnSixshotGroup(w, h, s)
-  },
+  init(w, h, s) { s.targets = []; spawnSixshotGroup(w, h, s) },
   update() {},
-  onClick(w, h, s, x, y) {
+  onClick(sx, sy, s) {
     s.clicks++
     for (let i = s.targets.length - 1; i >= 0; i--) {
-      if (hitTest(x, y, s.targets[i])) {
+      if (hitTest(sx, sy, s.targets[i])) {
         onHit(s, s.targets[i])
         s.targets.splice(i, 1)
-        if (s.targets.length === 0) spawnSixshotGroup(w, h, s)
+        if (s.targets.length === 0) spawnSixshotGroup(s._worldW || 100, s._worldH || 60, s)
         return
       }
     }
     onMiss()
-  },
-  draw(ctx, w, h, s) {
-    s.targets.forEach(t => drawTarget(ctx, t))
-    drawCrosshair(ctx, s.mouseX, s.mouseY)
-    const def = MODES.find(m => m.id === 'sixshot')!
-    drawHUD(ctx, w, h, s, def.name)
   },
 }
 
 function spawnSixshotGroup(w: number, h: number, s: GameState) {
   for (let i = 0; i < 6; i++) {
-    const [x, y] = randomPos(w, h, 30)
-    s.targets.push(createTarget(x, y, 14, '#00aaff'))
+    const [x, y] = randomPos(w, h, 2)
+    s.targets.push(createTarget(x, y, 0.8, '#00aaff'))
   }
 }
 
 // ─── Spidershot ───
 export const spidershot: GameModeHandler = {
-  init(w, h, s) {
-    s.targets = []
-    s.spiderRound = 0
-    spawnSpiderTargets(w, h, s)
-  },
+  init(_w, _h, s) { s.targets = []; s.spiderRound = 0; spawnSpiderTargets(s) },
   update() {},
-  onClick(w, h, s, x, y) {
+  onClick(sx, sy, s) {
     s.clicks++
     for (let i = s.targets.length - 1; i >= 0; i--) {
-      if (hitTest(x, y, s.targets[i])) {
+      if (hitTest(sx, sy, s.targets[i])) {
         onHit(s, s.targets[i])
         s.targets.splice(i, 1)
-        if (s.targets.length === 0) {
-          s.spiderRound++
-          spawnSpiderTargets(w, h, s)
-        }
+        if (s.targets.length === 0) { s.spiderRound++; spawnSpiderTargets(s) }
         return
       }
     }
     onMiss()
   },
-  draw(ctx, w, h, s) {
-    s.targets.forEach(t => drawTarget(ctx, t))
-    drawCrosshair(ctx, s.mouseX, s.mouseY)
-    const def = MODES.find(m => m.id === 'spidershot')!
-    drawHUD(ctx, w, h, s, def.name)
-  },
 }
 
-function spawnSpiderTargets(w: number, h: number, s: GameState) {
-  const cx = w / 2, cy = h / 2
+function spawnSpiderTargets(s: GameState) {
   const rings = Math.min(1 + Math.floor(s.spiderRound / 2), 3)
-  const targetsPerRing = 3
+  const perRing = 3
   for (let ring = 0; ring < rings; ring++) {
-    const radius = 80 + ring * 120
-    for (let i = 0; i < targetsPerRing; i++) {
-      const angle = (Math.PI * 2 / targetsPerRing) * i + ring * 0.5
-      const x = cx + Math.cos(angle) * radius
-      const y = cy + Math.sin(angle) * radius
-      const margin = 25
-      if (x > margin && x < w - margin && y > margin && y < h - margin) {
-        s.targets.push(createTarget(x, y, 22, '#00aaff'))
-      }
+    const radius = 4 + ring * 7
+    for (let i = 0; i < perRing; i++) {
+      const angle = (Math.PI * 2 / perRing) * i + ring * 0.5
+      s.targets.push(createTarget(Math.cos(angle) * radius, Math.sin(angle) * radius, 1.2, '#00aaff'))
     }
-  }
-  // If no targets spawned (edge case), spawn center target
-  if (s.targets.length === 0) {
-    s.targets.push(createTarget(cx, cy, 25, '#00aaff'))
   }
 }
 
 // ─── Motionshot ───
 export const motionshot: GameModeHandler = {
-  init(w, h, s) {
-    s.targets = []
-    spawnMotionTarget(w, h, s)
-  },
+  init(w, h, s) { s.targets = []; spawnMotionTarget(w, h, s) },
   update(w, h, s) {
     s.targets.forEach(t => {
       if (t.vx === undefined) return
       t.x += t.vx!; t.y += t.vy!
-      if (t.x - t.r < 0 || t.x + t.r > w) t.vx = -(t.vx!)
-      if (t.y - t.r < 0 || t.y + t.r > h) t.vy = -(t.vy!)
-      t.x = Math.max(t.r, Math.min(w - t.r, t.x))
-      t.y = Math.max(t.r, Math.min(h - t.r, t.y))
+      const hw = w / 2, hh = h / 2
+      if (t.x - t.r < -hw || t.x + t.r > hw) t.vx = -(t.vx!)
+      if (t.y - t.r < -hh || t.y + t.r > hh) t.vy = -(t.vy!)
+      t.x = Math.max(-hw + t.r, Math.min(hw - t.r, t.x))
+      t.y = Math.max(-hh + t.r, Math.min(hh - t.r, t.y))
     })
   },
-  onClick(w, h, s, x, y) {
+  onClick(sx, sy, s) {
     s.clicks++
     for (let i = s.targets.length - 1; i >= 0; i--) {
-      if (hitTest(x, y, s.targets[i])) {
+      if (hitTest(sx, sy, s.targets[i])) {
         onHit(s, s.targets[i])
         s.targets.splice(i, 1)
-        spawnMotionTarget(w, h, s)
+        spawnMotionTarget(s._worldW || 100, s._worldH || 60, s)
         return
       }
     }
     onMiss()
   },
-  draw(ctx, w, h, s) {
-    s.targets.forEach(t => drawTarget(ctx, t))
-    drawCrosshair(ctx, s.mouseX, s.mouseY)
-    const def = MODES.find(m => m.id === 'motionshot')!
-    drawHUD(ctx, w, h, s, def.name)
-  },
 }
 
 function spawnMotionTarget(w: number, h: number, s: GameState) {
-  const t = createTarget(0, 0, 26, '#00aaff')
-  t.x = 80 + Math.random() * (w - 160)
-  t.y = 80 + Math.random() * (h - 160)
-  const speed = 2 + Math.random() * 3
+  const [x, y] = randomPos(w, h, 3)
+  const t = createTarget(x, y, 1.4, '#00aaff')
+  const speed = 0.15 + Math.random() * 0.2
   const angle = Math.random() * Math.PI * 2
   t.vx = Math.cos(angle) * speed
   t.vy = Math.sin(angle) * speed
@@ -220,53 +159,37 @@ function spawnMotionTarget(w: number, h: number, s: GameState) {
 
 // ─── Microshot ───
 export const microshot: GameModeHandler = {
-  init(w, h, s) {
-    s.targets = []
-    spawnMicroTarget(w, h, s)
-  },
+  init(_w, _h, s) { s.targets = []; spawnMicroTarget(s) },
   update() {},
-  onClick(w, _h, s, x, y) {
+  onClick(sx, sy, s) {
     s.clicks++
-    if (s.targets[0] && hitTest(x, y, s.targets[0])) {
+    if (s.targets[0] && hitTest(sx, sy, s.targets[0])) {
       onHit(s, s.targets[0])
       s.targets.splice(0, 1)
-      spawnMicroTarget(w, _h, s)
-    } else {
-      onMiss()
-    }
-  },
-  draw(ctx, w, h, s) {
-    s.targets.forEach(t => drawTarget(ctx, t))
-    drawCrosshair(ctx, s.mouseX, s.mouseY)
-    const def = MODES.find(m => m.id === 'microshot')!
-    drawHUD(ctx, w, h, s, def.name)
+      spawnMicroTarget(s)
+    } else { onMiss() }
   },
 }
 
-function spawnMicroTarget(w: number, h: number, s: GameState) {
-  const cx = w / 2, cy = h / 2
-  const x = cx + (Math.random() - 0.5) * 200
-  const y = cy + (Math.random() - 0.5) * 200
-  s.targets.push(createTarget(x, y, 10, '#ff9900'))
+function spawnMicroTarget(s: GameState) {
+  const x = (Math.random() - 0.5) * 12
+  const y = (Math.random() - 0.5) * 12
+  s.targets.push(createTarget(x, y, 0.6, '#ff9900'))
 }
 
 // ─── Multitarget ───
 export const multitarget: GameModeHandler = {
-  init(w, h, s) {
-    s.targets = []
-    spawnMultiTargetGroup(w, h, s)
-  },
+  init(w, h, s) { s.targets = []; spawnMultiTargetGroup(w, h, s) },
   update() {},
-  onClick(w, h, s, x, y) {
+  onClick(sx, sy, s) {
     s.clicks++
     for (let i = s.targets.length - 1; i >= 0; i--) {
-      if (hitTest(x, y, s.targets[i])) {
+      if (hitTest(sx, sy, s.targets[i])) {
         if (s.targets[i].color === '#00ff88') {
           onHit(s, s.targets[i])
           s.targets.splice(i, 1)
-          spawnMultiTargetGroup(w, h, s)
+          spawnMultiTargetGroup(s._worldW || 100, s._worldH || 60, s)
         } else {
-          // Wrong target
           playHit()
           s.score = Math.max(0, s.score - 5)
         }
@@ -275,30 +198,23 @@ export const multitarget: GameModeHandler = {
     }
     onMiss()
   },
-  draw(ctx, w, h, s) {
-    s.targets.forEach(t => drawTarget(ctx, t))
-    drawCrosshair(ctx, s.mouseX, s.mouseY)
-    const def = MODES.find(m => m.id === 'multitarget')!
-    drawHUD(ctx, w, h, s, def.name)
-  },
 }
 
 function spawnMultiTargetGroup(w: number, h: number, s: GameState) {
   const count = 5 + Math.floor(Math.random() * 2)
   const correctIdx = Math.floor(Math.random() * count)
   for (let i = 0; i < count; i++) {
-    const [x, y] = randomPos(w, h, 50)
-    const t = createTarget(x, y, 28, i === correctIdx ? '#00ff88' : '#ff3366')
-    s.targets.push(t)
+    const [x, y] = randomPos(w, h, 3)
+    s.targets.push(createTarget(x, y, 1.5, i === correctIdx ? '#00ff88' : '#ff3366'))
   }
 }
 
 // ─── Strafetrack ───
 export const strafetrack: GameModeHandler = {
-  init(w, h, s) {
+  init(_w, _h, s) {
     s.targets = []
-    const t = createTarget(w / 2, h / 2, 35, '#aa66ff')
-    t.vx = 3 * (Math.random() > 0.5 ? 1 : -1)
+    const t = createTarget(0, 0, 1.8, '#aa66ff')
+    t.vx = 0.2 * (Math.random() > 0.5 ? 1 : -1)
     t.vy = 0
     s.targets.push(t)
   },
@@ -306,8 +222,9 @@ export const strafetrack: GameModeHandler = {
     const t = s.targets[0]
     if (!t || t.vx === undefined) return
     t.x += t.vx
-    if (t.x - t.r < 0 || t.x + t.r > w) t.vx *= -1
-    t.x = Math.max(t.r, Math.min(w - t.r, t.x))
+    const hw = w / 2
+    if (t.x - t.r < -hw || t.x + t.r > hw) t.vx *= -1
+    t.x = Math.max(-hw + t.r, Math.min(hw - t.r, t.x))
     const dx = s.mouseX - t.x, dy = s.mouseY - t.y
     s.trackingTime += 16
     if (dx * dx + dy * dy <= t.r * t.r) s.trackingOnTarget += 16
@@ -315,39 +232,16 @@ export const strafetrack: GameModeHandler = {
     s.score = Math.floor(s.accuracy * 100)
   },
   onClick() {},
-  draw(ctx, w, h, s) {
-    s.targets.forEach(t => drawTarget(ctx, t))
-    drawCrosshair(ctx, s.mouseX, s.mouseY)
-    const def = MODES.find(m => m.id === 'strafetrack')!
-    // Custom HUD for tracking
-    const elapsed = (Date.now() - s.startTime) / 1000
-    const timeLeft = Math.max(0, s.duration - elapsed)
-    ctx.fillStyle = '#ffffff33'
-    ctx.font = 'bold 18px monospace'
-    ctx.textAlign = 'center'
-    ctx.fillText(def.name, w / 2, 35)
-    ctx.fillStyle = timeLeft < 5 ? '#ff3366' : '#ffffff'
-    ctx.font = 'bold 22px monospace'
-    ctx.textAlign = 'left'
-    ctx.fillText(`${timeLeft.toFixed(1)}s`, 20, 40)
-    ctx.fillStyle = '#00ff88'
-    ctx.textAlign = 'right'
-    ctx.fillText(`${(s.accuracy * 100).toFixed(1)}%`, w - 20, 40)
-    ctx.fillStyle = '#ffffff33'
-    ctx.font = '13px monospace'
-    ctx.textAlign = 'center'
-    ctx.fillText('ESC 返回', w / 2, h - 20)
-  },
 }
 
 // ─── Circleshoot ───
 export const circleshoot: GameModeHandler = {
-  init(w, h, s) {
+  init(_w, _h, s) {
     s.targets = []
-    const t = createTarget(w / 2, h / 2 + 150, 30, '#aa66ff')
-    t.orbitCx = w / 2
-    t.orbitCy = h / 2
-    t.orbitRadius = Math.min(w, h) * 0.25
+    const t = createTarget(0, 15, 1.5, '#aa66ff')
+    t.orbitCx = 0
+    t.orbitCy = 0
+    t.orbitRadius = 15
     t.angle = Math.PI / 2
     t.angularV = 0.02
     s.targets.push(t)
@@ -365,40 +259,17 @@ export const circleshoot: GameModeHandler = {
     s.score = Math.floor(s.accuracy * 100)
   },
   onClick() {},
-  draw(ctx, w, h, s) {
-    // Draw orbit path
-    const t = s.targets[0]
-    if (t?.orbitCx !== undefined) {
-      ctx.strokeStyle = '#ffffff11'
-      ctx.lineWidth = 1
-      ctx.beginPath()
-      ctx.arc(t.orbitCx!, t.orbitCy!, t.orbitRadius!, 0, Math.PI * 2)
-      ctx.stroke()
-    }
-    s.targets.forEach(t2 => drawTarget(ctx, t2))
-    drawCrosshair(ctx, s.mouseX, s.mouseY)
-    // Custom HUD same as strafetrack
-    const elapsed = (Date.now() - s.startTime) / 1000
-    const timeLeft = Math.max(0, s.duration - elapsed)
-    ctx.fillStyle = '#ffffff33'; ctx.font = 'bold 18px monospace'; ctx.textAlign = 'center'
-    ctx.fillText('Circleshoot', w / 2, 35)
-    ctx.fillStyle = timeLeft < 5 ? '#ff3366' : '#ffffff'; ctx.font = 'bold 22px monospace'; ctx.textAlign = 'left'
-    ctx.fillText(`${timeLeft.toFixed(1)}s`, 20, 40)
-    ctx.fillStyle = '#00ff88'; ctx.textAlign = 'right'
-    ctx.fillText(`${(s.accuracy * 100).toFixed(1)}%`, w - 20, 40)
-    ctx.fillStyle = '#ffffff33'; ctx.font = '13px monospace'; ctx.textAlign = 'center'
-    ctx.fillText('ESC 返回', w / 2, h - 20)
-  },
 }
 
 // ─── Reactiveshot ───
 export const reactiveshot: GameModeHandler = {
-  init(w, h, s) {
+  init(_w, _h, s) {
     s.targets = []
     s.reactionState = 'hidden'
-    const t = createTarget(w / 2, h / 2, 30, '#aa66ff')
-    t.vx = 2 * (Math.random() > 0.5 ? 1 : -1)
+    const t = createTarget(0, 0, 1.5, '#aa66ff')
+    t.vx = 0.15 * (Math.random() > 0.5 ? 1 : -1)
     t.vy = 0
+    t.visible = false
     s.targets.push(t)
     scheduleReactiveToggle(s)
   },
@@ -406,49 +277,28 @@ export const reactiveshot: GameModeHandler = {
     const t = s.targets[0]
     if (!t) return
     if (s.reactionState === 'visible' && t.vx !== undefined) {
+      t.visible = true
       t.x += t.vx
-      if (t.x - t.r < 0 || t.x + t.r > w) t.vx *= -1
-      t.x = Math.max(t.r, Math.min(w - t.r, t.x))
+      const hw = w / 2
+      if (t.x - t.r < -hw || t.x + t.r > hw) t.vx *= -1
+      t.x = Math.max(-hw + t.r, Math.min(hw - t.r, t.x))
       const dx = s.mouseX - t.x, dy = s.mouseY - t.y
       s.trackingTime += 16
       if (dx * dx + dy * dy <= t.r * t.r) s.trackingOnTarget += 16
       s.accuracy = s.trackingTime ? s.trackingOnTarget / s.trackingTime : 0
       s.score = Math.floor(s.accuracy * 100)
+    } else {
+      t.visible = false
     }
   },
   onClick() {},
-  draw(ctx, w, h, s) {
-    if (s.reactionState === 'visible') {
-      s.targets.forEach(t => drawTarget(ctx, t))
-    } else {
-      const t = s.targets[0]
-      if (t) {
-        ctx.fillStyle = '#ffffff11'
-        ctx.beginPath(); ctx.arc(t.x, t.y, t.r, 0, Math.PI * 2); ctx.fill()
-        ctx.fillStyle = '#ffffff33'; ctx.font = '14px monospace'; ctx.textAlign = 'center'
-        ctx.fillText('等待...', t.x, t.y + 4)
-      }
-    }
-    drawCrosshair(ctx, s.mouseX, s.mouseY)
-    const elapsed = (Date.now() - s.startTime) / 1000
-    const timeLeft = Math.max(0, s.duration - elapsed)
-    ctx.fillStyle = '#ffffff33'; ctx.font = 'bold 18px monospace'; ctx.textAlign = 'center'
-    ctx.fillText('Reactiveshot', w / 2, 35)
-    ctx.fillStyle = timeLeft < 5 ? '#ff3366' : '#ffffff'; ctx.font = 'bold 22px monospace'; ctx.textAlign = 'left'
-    ctx.fillText(`${timeLeft.toFixed(1)}s`, 20, 40)
-    ctx.fillStyle = s.reactionState === 'visible' ? '#00ff88' : '#ff3366'; ctx.textAlign = 'right'
-    ctx.font = 'bold 16px monospace'
-    ctx.fillText(s.reactionState === 'visible' ? '跟踪中!' : '隐藏', w - 20, 40)
-    ctx.fillStyle = '#ffffff33'; ctx.font = '13px monospace'; ctx.textAlign = 'center'
-    ctx.fillText('ESC 返回', w / 2, h - 20)
-  },
 }
 
 function scheduleReactiveToggle(s: GameState) {
   const show = () => {
     if (!s.running) return
     s.reactionState = 'visible'
-    s.targets.forEach(t => t.scale = 0)
+    s.targets.forEach(t => { t.scale = 0; t.visible = true })
     const t = s.targets[0]
     if (t) t.spawnTime = Date.now()
     s._spawnTimer = setTimeout(hide, 1500 + Math.random() * 2000)
@@ -470,7 +320,7 @@ export const reaction: GameModeHandler = {
     scheduleReactionColor(s)
   },
   update() {},
-  onClick(_w, _h, s, _x, _y) {
+  onClick(_sx, _sy, s) {
     if (s.reactionState === 'ready') {
       s.reactionTimes.push(Date.now() - s.reactionColorTime)
       s.reactionState = 'clicked'
@@ -481,27 +331,6 @@ export const reaction: GameModeHandler = {
     } else if (s.reactionState === 'waiting') {
       playHit()
     }
-  },
-  draw(ctx, w, h, s) {
-    if (s.reactionState === 'waiting') {
-      ctx.fillStyle = '#1a1a2e'
-      ctx.fillRect(0, 0, w, h)
-      ctx.fillStyle = '#666'; ctx.font = 'bold 32px monospace'; ctx.textAlign = 'center'
-      ctx.fillText('等待变色...', w / 2, h / 2)
-    } else if (s.reactionState === 'ready') {
-      ctx.fillStyle = '#00ff88'
-      ctx.fillRect(0, 0, w, h)
-      ctx.fillStyle = '#000'; ctx.font = 'bold 48px monospace'; ctx.textAlign = 'center'
-      ctx.fillText('点击！', w / 2, h / 2)
-    } else if (s.reactionState === 'clicked') {
-      ctx.fillStyle = '#1a1a2e'
-      ctx.fillRect(0, 0, w, h)
-      ctx.fillStyle = '#00ff88'; ctx.font = 'bold 36px monospace'; ctx.textAlign = 'center'
-      ctx.fillText(`${s.reactionTimes[s.reactionTimes.length - 1]}ms`, w / 2, h / 2)
-    }
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 20px monospace'; ctx.textAlign = 'left'
-    ctx.fillText(`${Math.min(s.reactionRound + 1, 5)}/5`, 20, 40)
-    drawCrosshair(ctx, s.mouseX, s.mouseY)
   },
   checkEnd(s): GameResult | null {
     if (s.reactionRound >= 5 && s.reactionState === 'clicked') {
@@ -523,39 +352,25 @@ function scheduleReactionColor(s: GameState) {
 
 // ─── Detection ───
 export const detection: GameModeHandler = {
-  init(w, h, s) {
-    s.targets = []
-    s.detectionRound = 0
-    spawnDetectionGroup(w, h, s)
-  },
+  init(w, h, s) { s.targets = []; s.detectionRound = 0; spawnDetectionGroup(w, h, s) },
   update() {},
-  onClick(w, h, s, x, y) {
+  onClick(sx, sy, s) {
     s.clicks++
     for (let i = s.targets.length - 1; i >= 0; i--) {
-      if (hitTest(x, y, s.targets[i])) {
+      if (hitTest(sx, sy, s.targets[i])) {
         if (s.targets[i].color === '#ff3366') {
           s.hits++
           s.reactionTimes.push(Date.now() - s.targets[i].spawnTime)
           playHit()
           s.detectionRound++
           s.targets.splice(i, 1)
-          if (s.detectionRound >= 10) return // end
-          spawnDetectionGroup(w, h, s)
-        } else {
-          onMiss()
-        }
+          if (s.detectionRound >= 10) return
+          spawnDetectionGroup(s._worldW || 100, s._worldH || 60, s)
+        } else { onMiss() }
         return
       }
     }
     onMiss()
-  },
-  draw(ctx, w, h, s) {
-    s.targets.forEach(t => drawTarget(ctx, t))
-    drawCrosshair(ctx, s.mouseX, s.mouseY)
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 20px monospace'; ctx.textAlign = 'left'
-    ctx.fillText(`${Math.min(s.detectionRound + 1, 10)}/10`, 20, 40)
-    ctx.fillStyle = '#ffffff33'; ctx.font = '13px monospace'; ctx.textAlign = 'center'
-    ctx.fillText('ESC 返回', w / 2, h - 20)
   },
   checkEnd(s): GameResult | null {
     if (s.detectionRound >= 10) {
@@ -571,62 +386,41 @@ function spawnDetectionGroup(w: number, h: number, s: GameState) {
   const count = 4 + Math.floor(Math.random() * 4)
   const correctIdx = Math.floor(Math.random() * count)
   for (let i = 0; i < count; i++) {
-    const [x, y] = randomPos(w, h, 40)
-    s.targets.push(createTarget(x, y, 24, i === correctIdx ? '#ff3366' : '#00aaff'))
+    const [x, y] = randomPos(w, h, 3)
+    s.targets.push(createTarget(x, y, 1.3, i === correctIdx ? '#ff3366' : '#00aaff'))
   }
 }
 
 // ─── Scattershot ───
 export const scattershot: GameModeHandler = {
-  init(w, h, s) {
-    s.targets = []
-    spawnScatterTarget(w, h, s)
-  },
-  update(w, _h, s) {
+  init(w, h, s) { s.targets = []; spawnScatterTarget(w, h, s) },
+  update(w, h, s) {
     const now = Date.now()
     for (let i = s.targets.length - 1; i >= 0; i--) {
       const t = s.targets[i]
       if (t.lifetime && now - t.spawnTime > t.lifetime) {
         s.targets.splice(i, 1)
-        spawnScatterTarget(w, w, s) // w used as placeholder
+        spawnScatterTarget(w, h, s)
       }
     }
   },
-  onClick(w, h, s, x, y) {
+  onClick(sx, sy, s) {
     s.clicks++
     for (let i = s.targets.length - 1; i >= 0; i--) {
-      if (hitTest(x, y, s.targets[i])) {
+      if (hitTest(sx, sy, s.targets[i])) {
         onHit(s, s.targets[i])
         s.targets.splice(i, 1)
-        spawnScatterTarget(w, h, s)
+        spawnScatterTarget(s._worldW || 100, s._worldH || 60, s)
         return
       }
     }
     onMiss()
   },
-  draw(ctx, w, h, s) {
-    s.targets.forEach(t => {
-      // Draw fade-out indicator
-      if (t.lifetime) {
-        const elapsed = Date.now() - t.spawnTime
-        const remaining = 1 - elapsed / t.lifetime
-        if (remaining < 0.3) {
-          ctx.strokeStyle = '#ff336666'
-          ctx.lineWidth = 2
-          ctx.beginPath(); ctx.arc(t.x, t.y, t.r * t.scale + 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * remaining); ctx.stroke()
-        }
-      }
-      drawTarget(ctx, t)
-    })
-    drawCrosshair(ctx, s.mouseX, s.mouseY)
-    const def = MODES.find(m => m.id === 'scattershot')!
-    drawHUD(ctx, w, h, s, def.name)
-  },
 }
 
-function spawnScatterTarget(w: number, _h: number, s: GameState) {
-  const [x, y] = randomPos(w, w, 50)
-  const t = createTarget(x, y, 25, '#ff3366')
+function spawnScatterTarget(w: number, h: number, s: GameState) {
+  const [x, y] = randomPos(w, h, 3)
+  const t = createTarget(x, y, 1.3, '#ff3366')
   t.lifetime = 800
   s.targets.push(t)
 }

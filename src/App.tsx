@@ -1,15 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { type GameState, drawGrid, makeResult } from './engine'
+import { type GameState, makeResult } from './engine'
 import { MODES, CATEGORIES, type GameResult, getHistory, saveHistory, getBest } from './types'
 import { HANDLERS } from './modes'
-
-export interface GameModeHandler {
-  init(w: number, h: number, s: GameState): void
-  update(w: number, h: number, s: GameState): void
-  onClick(w: number, h: number, s: GameState, x: number, y: number): void
-  draw(ctx: CanvasRenderingContext2D, w: number, h: number, s: GameState): void
-  checkEnd?(s: GameState): GameResult | null
-}
+import { initScene, disposeScene, renderScene, getVisibleBounds, screenToWorld } from './scene'
+import { syncTargets, updateMeshes, updateParticles, clearAll } from './targets'
+import type { Target } from './engine'
 
 type Screen = 'menu' | 'game' | 'result'
 
@@ -18,7 +13,7 @@ export default function App() {
   const [, setActiveMode] = useState<string | null>(null)
   const [result, setResult] = useState<GameResult | null>(null)
   const [tab, setTab] = useState('flicking')
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const stateRef = useRef<GameState>({} as GameState)
   const rafRef = useRef(0)
   const pendingModeRef = useRef<string | null>(null)
@@ -53,58 +48,68 @@ export default function App() {
     if (screen !== 'game' || !modeId) return
     pendingModeRef.current = null
 
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    const container = containerRef.current
+    if (!container) return
 
     const modeDef = MODES.find(m => m.id === modeId)
     if (!modeDef) return
     const handler = HANDLERS[modeId]
     if (!handler) return
 
-    canvas.width = window.innerWidth
-    canvas.height = window.innerHeight
-
     setActiveMode(modeId)
+
+    const bounds = getVisibleBounds()
+    const worldW = bounds.halfW * 2
+    const worldH = bounds.halfH * 2
+
     const s = stateRef.current
     Object.assign(s, {
       running: true, mode: modeId, score: 0, hits: 0, clicks: 0, totalTime: 0,
       startTime: Date.now(), duration: modeDef.duration,
-      targets: [], mouseX: canvas.width / 2, mouseY: canvas.height / 2,
+      targets: [] as Target[], mouseX: 0, mouseY: 0,
       reactionRound: 0, reactionTimes: [], reactionState: 'waiting', reactionColorTime: 0,
       trackingTime: 0, trackingOnTarget: 0, accuracy: 0,
       detectionRound: 0, spiderRound: 0,
+      _worldW: worldW, _worldH: worldH,
     })
 
-    handler.init(canvas.width, canvas.height, s)
+    // Clear any leftover meshes
+    clearAll()
 
-    const onMouse = (e: MouseEvent) => { s.mouseX = e.clientX; s.mouseY = e.clientY }
+    handler.init(worldW, worldH, s)
+
+    const onMouse = (e: MouseEvent) => {
+      const wp = screenToWorld(e.clientX, e.clientY)
+      if (wp) { s.mouseX = wp.x; s.mouseY = wp.y }
+    }
     const onClick = (e: MouseEvent) => {
       if (!s.running) return
-      handler.onClick(canvas.width, canvas.height, s, e.clientX, e.clientY)
+      const wp = screenToWorld(e.clientX, e.clientY)
+      if (!wp) return
+      handler.onClick(wp.x, wp.y, s)
     }
 
-    canvas.addEventListener('mousemove', onMouse)
-    canvas.addEventListener('click', onClick)
+    window.addEventListener('mousemove', onMouse)
+    window.addEventListener('click', onClick)
     s._cleanup = () => {
-      canvas.removeEventListener('mousemove', onMouse)
-      canvas.removeEventListener('click', onClick)
+      window.removeEventListener('mousemove', onMouse)
+      window.removeEventListener('click', onClick)
     }
+
+    let lastTime = performance.now()
 
     const draw = () => {
       if (!s.running) return
-      const w = canvas.width, h = canvas.height
-
-      // Clear
-      ctx.fillStyle = '#0a0a0f'
-      ctx.fillRect(0, 0, w, h)
-      drawGrid(ctx, w, h)
+      const now = performance.now()
+      const dt = (now - lastTime) / 1000
+      lastTime = now
 
       // Check end for untimed modes
       if (handler.checkEnd) {
         const r = handler.checkEnd(s)
         if (r) {
+          clearAll()
+          renderScene()
           setResult(r); saveHistory(r); setScreen('result')
           s.running = false
           return
@@ -115,18 +120,43 @@ export default function App() {
       if (modeDef.duration > 0) {
         const elapsed = (Date.now() - s.startTime) / 1000
         if (elapsed >= modeDef.duration) {
+          clearAll()
+          renderScene()
           endGame(s)
           return
         }
       }
 
-      handler.update(w, h, s)
-      handler.draw(ctx, w, h, s)
+      handler.update(worldW, worldH, s)
+      syncTargets(s.targets)
+      updateMeshes(s.targets, now / 1000)
+      updateParticles(dt)
+      renderScene()
 
       rafRef.current = requestAnimationFrame(draw)
     }
     rafRef.current = requestAnimationFrame(draw)
+
+    return () => {
+      clearAll()
+    }
   }, [screen, endGame])
+
+  // Cleanup scene on result screen
+  useEffect(() => {
+    if (screen === 'result' && containerRef.current) {
+      disposeScene(containerRef.current)
+    }
+  }, [screen])
+
+  // Ref callback for game scene init (must be before conditional returns)
+  const gameRef = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return
+    containerRef.current = el
+    if (!el.querySelector('canvas')) {
+      initScene(el)
+    }
+  }, [])
 
   // ESC handler
   useEffect(() => {
@@ -135,6 +165,7 @@ export default function App() {
         stopGame()
         setScreen('menu')
         setActiveMode(null)
+        if (containerRef.current) disposeScene(containerRef.current)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -213,7 +244,7 @@ export default function App() {
 
   // ─── Game ───
   if (screen === 'game') {
-    return <canvas ref={canvasRef} className="fixed inset-0 w-full h-full" style={{ cursor: 'none' }} />
+    return <div ref={gameRef} className="fixed inset-0 w-full h-full" style={{ cursor: 'none' }} />
   }
 
   // ─── Result ───
